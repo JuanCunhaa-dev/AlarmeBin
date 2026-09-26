@@ -18,7 +18,12 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
 }
 
 $RandomBytes = New-Object byte[] 36
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($RandomBytes)
+$RandomGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try {
+    $RandomGenerator.GetBytes($RandomBytes)
+} finally {
+    $RandomGenerator.Dispose()
+}
 $PasswordText = [Convert]::ToBase64String($RandomBytes).Replace('+', '-').Replace('/', '_').TrimEnd('=')
 $SecurePassword = ConvertTo-SecureString $PasswordText -AsPlainText -Force
 $TemporaryPfx = Join-Path $env:TEMP ("alarmebin-" + [guid]::NewGuid().ToString('N') + '.pfx')
