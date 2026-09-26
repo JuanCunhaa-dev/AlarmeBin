@@ -1,0 +1,55 @@
+name: Signed private release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Import private release certificate
+        shell: powershell
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:CERTIFICATE_BASE64 -or -not $env:CERTIFICATE_PASSWORD) {
+            throw 'Os secrets do certificado não estão configurados.'
+          }
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'alarmebin-release.pfx'
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
+          $password = ConvertTo-SecureString $env:CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password -Exportable
+          if ($cert.Thumbprint -ne 'EF93510E6694345DCA8A960D634E0EA1C202D87D') { throw 'Certificado inesperado.' }
+          Import-Certificate -FilePath distribution\AlarmeBin-Public.cer -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
+          Import-Certificate -FilePath distribution\AlarmeBin-Public.cer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
+          Remove-Item -LiteralPath $pfxPath -Force
+      - run: npm run check
+      - run: npm test
+      - run: npm run dist
+      - name: Verify release signature
+        shell: powershell
+        run: |
+          $installer = Get-ChildItem release\AlarmeBin-Setup-*.exe | Select-Object -First 1
+          $signature = Get-AuthenticodeSignature $installer.FullName
+          if ($signature.Status -ne 'Valid') { throw "Assinatura inválida: $($signature.Status)" }
+          if ($signature.SignerCertificate.Thumbprint -ne 'EF93510E6694345DCA8A960D634E0EA1C202D87D') { throw 'Assinante inesperado.' }
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release/AlarmeBin-Private-Kit-*.zip
+            release/AlarmeBin-Setup-*.exe
+            release/AlarmeBin-Setup-*.exe.blockmap
+            distribution/AlarmeBin-Public.cer

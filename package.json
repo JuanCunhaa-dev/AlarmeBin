@@ -1,0 +1,94 @@
+{
+  "name": "alarmebin",
+  "version": "1.0.1",
+  "private": true,
+  "description": "Alarme desktop pessoal com gravação de voz e saída de áudio selecionável",
+  "main": "dist-electron/main.js",
+  "author": "AlarmeBin",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"npm:dev:electron\" \"npm:start:electron\"",
+    "dev:web": "vite",
+    "dev:electron": "tsc -p tsconfig.electron.json --watch --preserveWatchOutput",
+    "start:electron": "wait-on tcp:5173 dist-electron/main.js && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
+    "build": "npm run generate:icons && tsc -b && vite build && tsc -p tsconfig.electron.json && node scripts/copy-preload.mjs",
+    "dist": "npm run build && electron-builder --win nsis && npm run bundle:private",
+    "bundle:private": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-private-kit.ps1",
+    "generate:icons": "node scripts/generate-icons.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "check": "tsc -b --pretty false && eslint .",
+    "postinstall": "npm run generate:icons && node scripts/copy-preload.mjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@eslint/js": "latest",
+    "@playwright/test": "latest",
+    "@testing-library/jest-dom": "latest",
+    "@testing-library/react": "latest",
+    "@testing-library/user-event": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitest/coverage-v8": "latest",
+    "concurrently": "latest",
+    "cross-env": "latest",
+    "electron": "latest",
+    "electron-builder": "latest",
+    "eslint": "latest",
+    "eslint-plugin-react-hooks": "latest",
+    "eslint-plugin-react-refresh": "latest",
+    "globals": "latest",
+    "jsdom": "^29.0.0",
+    "png-to-ico": "latest",
+    "sharp": "latest",
+    "typescript": "latest",
+    "typescript-eslint": "latest",
+    "vite": "latest",
+    "vitest": "latest",
+    "wait-on": "latest"
+  },
+  "build": {
+    "appId": "com.alarmebin.app",
+    "productName": "AlarmeBin",
+    "asar": true,
+    "forceCodeSigning": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "build/icon.png", "to": "icon.png" }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": ["nsis"],
+      "signtoolOptions": {
+        "certificateSubjectName": "AlarmeBin Private Publisher",
+        "certificateSha1": "EF93510E6694345DCA8A960D634E0EA1C202D87D",
+        "publisherName": "AlarmeBin Private Publisher",
+        "signingHashAlgorithms": ["sha256"]
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AlarmeBin",
+      "artifactName": "AlarmeBin-Setup-${version}.${ext}"
+    }
+  }
+}

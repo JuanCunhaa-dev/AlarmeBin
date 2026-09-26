@@ -1,0 +1,24 @@
+ALARME BIN - KIT PRIVADO PARA WINDOWS
+=====================================
+
+1. Confira se estes quatro arquivos estão juntos:
+   - AlarmeBin-Public.cer
+   - AlarmeBin-Setup-x.y.z.exe
+   - Install-AlarmeBin.ps1
+   - Instalar-AlarmeBin.cmd
+
+2. Execute "Instalar-AlarmeBin.cmd".
+
+O instalador confere a impressão digital fixa do certificado público antes de
+adicioná-lo às lojas de confiança do usuário. Em seguida, confere se o EXE foi
+assinado pela mesma identidade. A chave privada NÃO faz parte deste pacote.
+
+Identidade: CN=AlarmeBin Private Publisher
+SHA-1: EF93510E6694345DCA8A960D634E0EA1C202D87D
+Validade: 26/09/2026 a 26/09/2036
+
+IMPORTANTE
+---------
+Este certificado é privado e só deve ser instalado em computadores pessoais
+controlados por você. Ele não cria confiança pública no SmartScreen. Remova a
+confiança executando Remove-AlarmeBin-Trust.ps1 caso deixe de usar o app.
