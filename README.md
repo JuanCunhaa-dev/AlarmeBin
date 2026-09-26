@@ -66,3 +66,11 @@ Validade: 26/09/2026 a 26/09/2036
 ```
 
 Os secrets necessários são `WINDOWS_CERTIFICATE_BASE64` e `WINDOWS_CERTIFICATE_PASSWORD`. Nunca coloque um arquivo `.pfx` ou sua senha no Git.
+
+O mantenedor configura esses secrets uma única vez, no computador que possui a chave privada:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/configure-github-signing.ps1
+```
+
+O script cria um PFX temporário com senha aleatória, envia ambos diretamente aos GitHub Actions Secrets, habilita `PRIVATE_SIGNING_READY` e remove o arquivo temporário. A senha não é impressa.

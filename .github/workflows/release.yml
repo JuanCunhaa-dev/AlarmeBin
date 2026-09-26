@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   release:
+    if: ${{ vars.PRIVATE_SIGNING_READY == 'true' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
