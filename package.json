@@ -1,6 +1,6 @@
 {
   "name": "alarmebin",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Alarme desktop pessoal com gravação de voz e saída de áudio selecionável",
   "main": "dist-electron/main.js",
