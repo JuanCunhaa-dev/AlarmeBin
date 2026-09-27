@@ -21,21 +21,56 @@ jobs:
       - run: npm ci
       - name: Import private release certificate
         shell: powershell
+        timeout-minutes: 5
         env:
           CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           if (-not $env:CERTIFICATE_BASE64 -or -not $env:CERTIFICATE_PASSWORD) {
-            throw 'Os secrets do certificado não estão configurados.'
+            throw 'Os secrets do certificado nao estao configurados.'
           }
           $pfxPath = Join-Path $env:RUNNER_TEMP 'alarmebin-release.pfx'
-          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
-          $password = ConvertTo-SecureString $env:CERTIFICATE_PASSWORD -AsPlainText -Force
-          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password -Exportable
-          if ($cert.Thumbprint -ne 'EF93510E6694345DCA8A960D634E0EA1C202D87D') { throw 'Certificado inesperado.' }
-          Import-Certificate -FilePath distribution\AlarmeBin-Public.cer -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
-          Import-Certificate -FilePath distribution\AlarmeBin-Public.cer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
-          Remove-Item -LiteralPath $pfxPath -Force
+          try {
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64.Trim()))
+
+            # X509Store avoids interactive trust prompts on headless Windows runners.
+            $flags = [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::UserKeySet -bor
+              [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::PersistKeySet -bor
+              [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
+            $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+              $pfxPath,
+              $env:CERTIFICATE_PASSWORD.Trim(),
+              $flags
+            )
+            if ($cert.Thumbprint -ne 'EF93510E6694345DCA8A960D634E0EA1C202D87D') {
+              throw 'Certificado inesperado.'
+            }
+
+            $myStore = [Security.Cryptography.X509Certificates.X509Store]::new('My', 'CurrentUser')
+            try {
+              $myStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+              $myStore.Add($cert)
+            } finally {
+              $myStore.Close()
+            }
+
+            $publicCert = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+              (Resolve-Path 'distribution\AlarmeBin-Public.cer').Path
+            )
+            foreach ($storeName in @('Root', 'TrustedPublisher')) {
+              $trustStore = [Security.Cryptography.X509Certificates.X509Store]::new($storeName, 'CurrentUser')
+              try {
+                $trustStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+                $trustStore.Add($publicCert)
+              } finally {
+                $trustStore.Close()
+              }
+            }
+          } finally {
+            if (Test-Path -LiteralPath $pfxPath) {
+              Remove-Item -LiteralPath $pfxPath -Force
+            }
+          }
       - run: npm run check
       - run: npm test
       - run: npm run dist
@@ -44,7 +79,7 @@ jobs:
         run: |
           $installer = Get-ChildItem release\AlarmeBin-Setup-*.exe | Select-Object -First 1
           $signature = Get-AuthenticodeSignature $installer.FullName
-          if ($signature.Status -ne 'Valid') { throw "Assinatura inválida: $($signature.Status)" }
+          if ($signature.Status -ne 'Valid') { throw "Assinatura invalida: $($signature.Status)" }
           if ($signature.SignerCertificate.Thumbprint -ne 'EF93510E6694345DCA8A960D634E0EA1C202D87D') { throw 'Assinante inesperado.' }
       - uses: softprops/action-gh-release@v2
         with:
