@@ -25,7 +25,7 @@ try {
     Invoke-NativeCommand -FilePath 'npm.cmd' -ArgumentList @('run', 'build')
 
     $BuilderPath = Join-Path $ProjectRoot 'node_modules\.bin\electron-builder.cmd'
-    $BuilderArguments = @('--win', 'nsis')
+    $BuilderArguments = @('--win', 'nsis', '--publish', 'never')
 
     if (-not $env:WIN_CSC_LINK) {
         # Builds locais usam o certificado privado instalado no perfil do usuario.
