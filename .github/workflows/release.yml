@@ -19,9 +19,9 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Import private release certificate
+      - name: Prepare private release certificate
         shell: powershell
-        timeout-minutes: 5
+        timeout-minutes: 2
         env:
           CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
@@ -30,56 +30,29 @@ jobs:
             throw 'Os secrets do certificado nao estao configurados.'
           }
           $pfxPath = Join-Path $env:RUNNER_TEMP 'alarmebin-release.pfx'
-          try {
-            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64.Trim()))
-
-            # X509Store avoids interactive trust prompts on headless Windows runners.
-            $flags = [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::UserKeySet -bor
-              [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::PersistKeySet -bor
-              [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
-            $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
-              $pfxPath,
-              $env:CERTIFICATE_PASSWORD.Trim(),
-              $flags
-            )
-            if ($cert.Thumbprint -ne 'EF93510E6694345DCA8A960D634E0EA1C202D87D') {
-              throw 'Certificado inesperado.'
-            }
-
-            $myStore = [Security.Cryptography.X509Certificates.X509Store]::new('My', 'CurrentUser')
-            try {
-              $myStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-              $myStore.Add($cert)
-            } finally {
-              $myStore.Close()
-            }
-
-            $publicCert = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
-              (Resolve-Path 'distribution\AlarmeBin-Public.cer').Path
-            )
-            foreach ($storeName in @('Root', 'TrustedPublisher')) {
-              $trustStore = [Security.Cryptography.X509Certificates.X509Store]::new($storeName, 'CurrentUser')
-              try {
-                $trustStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-                $trustStore.Add($publicCert)
-              } finally {
-                $trustStore.Close()
-              }
-            }
-          } finally {
-            if (Test-Path -LiteralPath $pfxPath) {
-              Remove-Item -LiteralPath $pfxPath -Force
-            }
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64.Trim()))
+          $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $pfxPath,
+            $env:CERTIFICATE_PASSWORD.Trim()
+          )
+          if (-not $cert.HasPrivateKey) { throw 'O PFX nao possui chave privada.' }
+          if ($cert.Thumbprint -ne 'EF93510E6694345DCA8A960D634E0EA1C202D87D') {
+            throw 'Certificado inesperado.'
           }
       - run: npm run check
       - run: npm test
-      - run: npm run dist
+      - name: Build signed release
+        run: npm run dist
+        env:
+          WIN_CSC_LINK: ${{ runner.temp }}\alarmebin-release.pfx
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
       - name: Verify release signature
         shell: powershell
         run: |
           $installer = Get-ChildItem release\AlarmeBin-Setup-*.exe | Select-Object -First 1
           $signature = Get-AuthenticodeSignature $installer.FullName
-          if ($signature.Status -ne 'Valid') { throw "Assinatura invalida: $($signature.Status)" }
+          if ($signature.Status -in @('NotSigned', 'HashMismatch')) { throw "Assinatura invalida: $($signature.Status)" }
+          if (-not $signature.SignerCertificate) { throw 'O instalador nao possui certificado de assinatura.' }
           if ($signature.SignerCertificate.Thumbprint -ne 'EF93510E6694345DCA8A960D634E0EA1C202D87D') { throw 'Assinante inesperado.' }
       - uses: softprops/action-gh-release@v2
         with:
@@ -89,3 +62,11 @@ jobs:
             release/AlarmeBin-Setup-*.exe
             release/AlarmeBin-Setup-*.exe.blockmap
             distribution/AlarmeBin-Public.cer
+      - name: Remove temporary certificate
+        if: ${{ always() }}
+        shell: powershell
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'alarmebin-release.pfx'
+          if (Test-Path -LiteralPath $pfxPath) {
+            Remove-Item -LiteralPath $pfxPath -Force
+          }
