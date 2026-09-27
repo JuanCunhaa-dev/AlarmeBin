@@ -34,7 +34,7 @@ try {
     }
 
     Invoke-NativeCommand -FilePath $BuilderPath -ArgumentList $BuilderArguments
-    Invoke-NativeCommand -FilePath 'npm.cmd' -ArgumentList @('run', 'bundle:private')
+    & (Join-Path $PSScriptRoot 'build-private-kit.ps1')
 } finally {
     Pop-Location
 }

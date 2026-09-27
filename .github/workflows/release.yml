@@ -42,7 +42,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - name: Build signed release
-        run: npm run dist
+        run: pwsh -NoProfile -File scripts/build-release.ps1
         env:
           WIN_CSC_LINK: ${{ runner.temp }}\alarmebin-release.pfx
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
